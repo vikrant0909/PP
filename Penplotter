@@ -1,0 +1,268 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <ESP32Servo.h>
+#include "SCMD.h"
+#include "SCMD_config.h" // Ensure this file is available and included correctly
+
+#define X_AXIS_MOTOR 1 // Motor C (Center) - Swapped
+#define Y_AXIS_MOTOR 0 // Motor A (Right) - Swapped
+
+#define X_LIMIT_SWITCH_LEFT 4 // Swapped
+#define X_LIMIT_SWITCH_RIGHT 6 // Swapped
+#define Y_LIMIT_SWITCH_FRONT 8 // Swapped R
+#define Y_LIMIT_SWITCH_BACK 10 // Swapped
+#define RED_LED 13
+#define YELLOW_LED 12
+#define PEN_SERVO_PIN 11
+
+#define MOTOR_SPEED 100 // Increased by 25% from original 90 For 5.4=50
+#define MOTOR_SPEEDX 107 // Increased by 25% from original 74   5.4=50
+#define MOTOR_SPEED_SLOW 107 // Increased by 25% from original 75
+
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Removed POSITIVE
+Servo penServo;
+
+SCMD myMotorDriver; // Create the main object for the motor driver
+int diagonalSpeedX = 102; 
+int diagonalSpeedY = 101  ; //For Perfect Upper Triangle y=101 x= 102
+int diagonalSpeedX1 = 95; //  the X draw x=90 Y= 85
+int diagonalSpeedY1 = 99;
+
+// Function declarations
+void penUp();
+void penDown();
+void home();
+void drawNikolausHouse();
+//void printLimitSwitchStatus();
+void moveToSimultaneously(int startX, int startY, int endX, int endY, int speedX, int speedY);
+
+
+void setup() {
+  // Initialize Serial for debugging
+  Serial.begin(115200);
+
+  // Initialize Qwiic Motor Driver
+  Wire.begin();
+  myMotorDriver.settings.commInterface = I2C_MODE;
+  myMotorDriver.settings.I2CAddress = 0x5D;
+lcd.clear();
+  while (myMotorDriver.begin() != 0xA9) {
+    Serial.println("ID mismatch, trying again");
+    delay(500);
+  }
+  Serial.println("ID matches 0xA9");
+
+  while (myMotorDriver.ready() == false) {
+    Serial.println("Waiting for Motor Driver to be ready...");
+    delay(500);
+  }
+  Serial.println("Motor Driver Ready.");
+
+  while (myMotorDriver.busy());
+  myMotorDriver.enable(); // Enable the motor driver
+
+  // Debugging message
+  Serial.println("Motor Driver enabled.");
+
+  // Initialize LCD
+  lcd.begin();
+  lcd.backlight();
+  
+  // Initialize pen servo
+  penServo.attach(PEN_SERVO_PIN);
+  penUp();
+
+  // Initialize limit switches
+  pinMode(X_LIMIT_SWITCH_LEFT, INPUT_PULLUP);
+  pinMode(X_LIMIT_SWITCH_RIGHT, INPUT_PULLUP);
+  pinMode(Y_LIMIT_SWITCH_FRONT, INPUT_PULLUP);
+  pinMode(Y_LIMIT_SWITCH_BACK, INPUT_PULLUP);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+  // Homing sequence
+  home();
+
+
+}
+
+void loop() {
+  
+   lcd.clear();
+   drawNikolausHouse();
+    // Check every second
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("HOMING...");
+  delay(1000); // Check every second
+    home();
+     // Check every second
+  
+  // Wait for 5 seconds after homing
+  delay(3000);
+}
+
+void home() {
+ 
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("HOMING...");
+  delay(1000); // Che
+
+  Serial.println("Starting homing X axis left");
+  // Homing X axis to the left limit switch
+  while (digitalRead(Y_LIMIT_SWITCH_BACK) == HIGH) {
+    myMotorDriver.setDrive(Y_AXIS_MOTOR, 1, MOTOR_SPEED_SLOW);
+  }
+  myMotorDriver.setDrive(Y_AXIS_MOTOR, 0, 0);
+  delay(500); // Small delay to ensure it has stopped
+  Serial.println("Homing Y axis left complete");
+
+  Serial.println("Starting homing X axis back");
+  // Homing Y axis to the back limit switch
+  while (digitalRead(X_LIMIT_SWITCH_LEFT) == HIGH) {
+    myMotorDriver.setDrive(X_AXIS_MOTOR, 0, MOTOR_SPEED_SLOW);
+  }
+  myMotorDriver.setDrive(X_AXIS_MOTOR, 0, 0);
+  delay(500); // Small delay to ensure it has stopped
+  Serial.println("Homing X axis back complete");
+
+  // Now at back left position
+  Serial.println("Positioning complete.");
+  digitalWrite(RED_LED, HIGH);
+  digitalWrite(YELLOW_LED, LOW);
+   lcd.clear();
+  lcd.print("HOMING DONE");
+  delay(1000);
+}
+
+void penUp() {
+  penServo.write(110); // Adjust the angle for your setup
+  delay(1000);
+  Serial.println("Pen up");
+}
+
+void penDown() {
+  penServo.write(0); // Adjust the angle for your setup
+  delay(1000);
+  Serial.println("Pen down");
+}
+
+void drawNikolausHouse() {
+  float startX = 0;
+  float startY = 0;
+
+digitalWrite(RED_LED, LOW);
+digitalWrite(YELLOW_LED, HIGH);
+
+lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Starting Drawing ");
+  lcd.setCursor(0, 1);
+  lcd.print("Nikolaus House...");
+  // Start drawing the house in one continuous line
+  
+// Start drawing the house in one continuous line
+  moveToSimultaneously(startX, startY, startX-50, startY-50, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000);
+  moveToSimultaneously(startX-50, startY-50, startX-50, startY-100, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000); 
+  penDown();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Drawing Nikolaus");
+  lcd.setCursor(0, 1);
+  lcd.print("House.");
+  delay(1000);
+  moveToSimultaneously(startX-50, startY-100, startX-100, startY-100, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000);
+  moveToSimultaneously(startX-100, startY-100, startX-100, startY-50, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000);
+    lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Drawing Nikolaus");
+  lcd.setCursor(0, 1);
+  lcd.print("House..");
+  moveToSimultaneously(startX-100, startY-50, startX-75, startY-25, diagonalSpeedX, diagonalSpeedY);
+  delay(1000);  
+  moveToSimultaneously(startX-75, startY-25, startX-50, startY-50, diagonalSpeedX, diagonalSpeedY);
+  delay(1000);
+  moveToSimultaneously(startX-50, startY-50, startX-100, startY-50, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000); 
+    lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Drawing Nikolaus");
+  lcd.setCursor(0, 1);
+  lcd.print("House...");
+  moveToSimultaneously(startX-100, startY-50, startX-50, startY-100, diagonalSpeedX1, diagonalSpeedY1);
+  delay(1000);
+  moveToSimultaneously(startX-50, startY-100, startX-50, startY-50, MOTOR_SPEEDX, MOTOR_SPEED);
+  delay(1000);
+  moveToSimultaneously(startX-50, startY-50, startX-100, startY-100, diagonalSpeedX1, diagonalSpeedY1);
+  delay(1000);
+  penUp();
+  delay(1000); 
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("HOUSE BUILT!");
+  delay(1000); 
+  digitalWrite(RED_LED, HIGH);
+  digitalWrite(YELLOW_LED, LOW);
+
+}
+
+void moveToSimultaneously(int startX, int startY, int endX, int endY, int speedX, int speedY) {
+  Serial.print("Moving to coordinates: ");
+  Serial.print(endX);
+  Serial.print(", ");
+  Serial.println(endY);
+
+  int deltaX = endX - startX;
+  int deltaY = endY - startY;
+  int steps = max(abs(deltaX), abs(deltaY));
+  float stepX = deltaX / (float)steps;
+  float stepY = deltaY / (float)steps;
+
+  // Determine if the movement is diagonal
+  bool isDiagonal = (deltaX != 0 && deltaY != 0);
+
+  for (int i = 0; i < steps; i++) {
+    // Apply different speeds if the movement is diagonal
+    int currentSpeedX = isDiagonal ? speedX : MOTOR_SPEEDX;  // Slower speed for diagonal
+    int currentSpeedY = isDiagonal ? speedY : MOTOR_SPEED;   // Slower speed for diagonal
+
+    if (stepX != 0) {
+      myMotorDriver.setDrive(X_AXIS_MOTOR, stepX > 0 ? 0 : 1, currentSpeedX);
+    }
+
+    if (stepY != 0) {
+      myMotorDriver.setDrive(Y_AXIS_MOTOR, stepY > 0 ? 1 : 0, currentSpeedY);
+    }
+
+    delay(10); // Small delay for each step
+
+    // Stop motors after each step to re-evaluate speed
+    myMotorDriver.setDrive(X_AXIS_MOTOR, 0, 0);
+    myMotorDriver.setDrive(Y_AXIS_MOTOR, 0, 0);
+
+    // Update start positions for the next iteration
+    startX += stepX;
+    startY += stepY;
+  }
+
+  Serial.println("Movement complete");
+}
+
+
+ 
+
+/*void printLimitSwitchStatus() {
+  Serial.print("X_LEFT: ");
+  Serial.print(digitalRead(X_LIMIT_SWITCH_LEFT));
+  Serial.print(", X_RIGHT: ");
+  Serial.print(digitalRead(X_LIMIT_SWITCH_RIGHT));
+  Serial.print(", Y_FRONT: ");
+  Serial.print(digitalRead(Y_LIMIT_SWITCH_FRONT));
+  Serial.print(", Y_BACK: ");
+  Serial.println(digitalRead(Y_LIMIT_SWITCH_BACK));
+}*/
