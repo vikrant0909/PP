@@ -252,17 +252,3 @@ void moveToSimultaneously(int startX, int startY, int endX, int endY, int speedX
 
   Serial.println("Movement complete");
 }
-
-
- 
-
-/*void printLimitSwitchStatus() {
-  Serial.print("X_LEFT: ");
-  Serial.print(digitalRead(X_LIMIT_SWITCH_LEFT));
-  Serial.print(", X_RIGHT: ");
-  Serial.print(digitalRead(X_LIMIT_SWITCH_RIGHT));
-  Serial.print(", Y_FRONT: ");
-  Serial.print(digitalRead(Y_LIMIT_SWITCH_FRONT));
-  Serial.print(", Y_BACK: ");
-  Serial.println(digitalRead(Y_LIMIT_SWITCH_BACK));
-}*/
